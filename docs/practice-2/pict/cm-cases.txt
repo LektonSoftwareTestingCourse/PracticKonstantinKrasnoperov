@@ -1,0 +1,9 @@
+bin	cardholder	currency	daily_limit	monthly_limit	initial_balance
+1	digits6	filled	digits3	positive	ge_daily	positive
+2	digits6	filled	digits3	positive	ge_daily	zero
+3	digits6	filled	digits3	positive	lt_daily	positive
+4	digits6	filled	digits3	zero	ge_daily	positive
+5	digits6	filled	wrong	positive	ge_daily	positive
+6	digits6	empty	digits3	positive	ge_daily	positive
+7	digits5	filled	digits3	positive	ge_daily	positive
+8	letters	filled	digits3	positive	ge_daily	positive

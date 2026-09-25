@@ -440,3 +440,21 @@ B — граница (boundary): AUTH-B1 = граница №1 для автор
 | TC-PW-025 | ACTIVE | found | equal | above | below | next_month | pos | grocery | DECLINED "61" |
 | TC-PW-026 | ACTIVE | found | above | below | below | next_month | pos | grocery | DECLINED "61" |
 | TC-PW-027 | ACTIVE | found | above | equal | below | next_month | pos | grocery | DECLINED "61" |
+
+
+### Модель Card Management
+
+Модель — `pict/cm-model.txt`: 6 параметров создания карты, 6 ограничений. Правило модели: невалидное значение встречается только с валидными остальными — соответствует правилу «один невалидный класс — один тест-кейс». Полный перебор — 96 комбинаций; попарный набор в `pict/cm-cases.txt` покрывает все пары значений за 8 строк.
+
+### Маппинг набора Card Management в тест-кейсы
+
+| Кейс | bin | cardholder | currency | daily | monthly | initial | Ожидание |
+|---|---|---|---|---|---|---|---|
+| CM-PW-01 | digits6 | filled | digits3 | positive | ge_daily | positive | карта создана: PAN 16 цифр по Луну, срок +3 года, статус ACTIVE |
+| CM-PW-02 | digits6 | filled | digits3 | positive | ge_daily | zero | 400 — стартовый баланс ≤ 0 |
+| CM-PW-03 | digits6 | filled | digits3 | positive | lt_daily | positive | 400 — месячный лимит меньше дневного (см. вопрос 1) |
+| CM-PW-04 | digits6 | filled | digits3 | zero | ge_daily | positive | 400 — дневной лимит ≤ 0 |
+| CM-PW-05 | digits6 | filled | wrong | positive | ge_daily | positive | 400 — некорректная валюта |
+| CM-PW-06 | digits6 | empty | digits3 | positive | ge_daily | positive | 400 — пустое имя держателя |
+| CM-PW-07 | digits5 | filled | digits3 | positive | ge_daily | positive | 400 — bin не 6 цифр |
+| CM-PW-08 | letters | filled | digits3 | positive | ge_daily | positive | 400 — bin содержит нецифровые символы |

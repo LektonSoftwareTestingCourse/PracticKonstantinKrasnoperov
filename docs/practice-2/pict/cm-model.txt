@@ -1,0 +1,13 @@
+bin:              digits6, digits5, letters
+cardholder:       filled, empty
+currency:         digits3, wrong
+daily_limit:      positive, zero
+monthly_limit:    ge_daily, lt_daily
+initial_balance:  positive, zero
+
+IF [bin] <> "digits6" THEN [cardholder] = "filled" AND [currency] = "digits3" AND [daily_limit] = "positive" AND [monthly_limit] = "ge_daily" AND [initial_balance] = "positive";
+IF [cardholder] = "empty" THEN [bin] = "digits6" AND [currency] = "digits3" AND [daily_limit] = "positive" AND [monthly_limit] = "ge_daily" AND [initial_balance] = "positive";
+IF [currency] = "wrong" THEN [bin] = "digits6" AND [cardholder] = "filled" AND [daily_limit] = "positive" AND [monthly_limit] = "ge_daily" AND [initial_balance] = "positive";
+IF [daily_limit] = "zero" THEN [bin] = "digits6" AND [cardholder] = "filled" AND [currency] = "digits3" AND [monthly_limit] = "ge_daily" AND [initial_balance] = "positive";
+IF [monthly_limit] = "lt_daily" THEN [bin] = "digits6" AND [cardholder] = "filled" AND [currency] = "digits3" AND [daily_limit] = "positive" AND [initial_balance] = "positive";
+IF [initial_balance] = "zero" THEN [bin] = "digits6" AND [cardholder] = "filled" AND [currency] = "digits3" AND [daily_limit] = "positive" AND [monthly_limit] = "ge_daily";
