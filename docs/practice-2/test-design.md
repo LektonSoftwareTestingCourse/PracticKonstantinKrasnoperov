@@ -2,6 +2,28 @@
 
 ## Тестовые сценарии (тест-кейсы)
 
+Для каждого кейса ниже явно указаны связанное требование, вид и источник тестовых данных. Предусловия, шаги и ожидаемый результат приведены в описании самого кейса.
+
+| ID | Требование | Вид | Источник |
+|---|---|---|---|
+| TC-01 | R-A2, R-A7 | позитивный | классы AUTH-03, AUTH-13 |
+| TC-02 | R-A2 | негативный | класс AUTH-04 |
+| TC-03 | R-A2 | негативный | класс AUTH-05 |
+| TC-04 | R-A2 | негативный | класс AUTH-06 |
+| TC-05 | R-A1 | негативный | класс AUTH-02 |
+| TC-06 | R-A3 | негативный | класс AUTH-08, граница AUTH-B04 |
+| TC-07 | R-A4 | позитивный | класс AUTH-09, граница AUTH-B01 (ON) |
+| TC-08 | R-A4 | негативный | класс AUTH-10, граница AUTH-B01 (OFF+) |
+| TC-09 | R-A5 | негативный | класс AUTH-12, граница AUTH-B02 (OFF+) |
+| TC-10 | R-A6 | позитивный | класс AUTH-13, граница AUTH-B03 (ON) |
+| TC-11 | R-A6 | негативный | класс AUTH-14, граница AUTH-B03 (OFF+) |
+| TC-12 | R-A8 | негативный | класс AUTH-20 |
+| TC-13 | R-C1, R-C2, R-C7 | позитивный | классы CM-01, CM-04, CM-06, CM-08 |
+| TC-14 | R-C4 | позитивный | класс CM-17 |
+| TC-15 | R-C5 | позитивный | класс CM-20 |
+| TC-16 | R-C3, R-C6, R-C7 | позитивный | классы CM-22, CM-24 |
+| TC-17 | R-C8 | позитивный | классы CM-26, CM-28, граница CM-B05 (ON) |
+
 ### Авторизация: статус карты
 
 **TC-01. Успешная транзакция по активной карте** — проверяет статусы карты и успешную авторизацию (R-A2, R-A7)
@@ -234,7 +256,7 @@
 3. Проводим транзакцию по этой карте
 
 Ожидаемый результат:
-1. DELETE отвечает 200
+1. DELETE отвечает 204 No Content
 2. GET возвращает 404
 3. Транзакция отклонена
 
@@ -249,7 +271,7 @@
 2. GET /api/cards?limit=50
 
 Ожидаемый результат:
-1. Создано ровно 20 карт; распределение по двум BIN примерно равное
+1. Создано ровно 20 карт; по каждому из двух BIN создано по 10 карт
 2. Все PAN проходят Луна; месячный лимит = дневной × 30
 3. Список возвращает созданные карты
 
@@ -267,6 +289,33 @@
 1. Ответ 200
 2. Доступный баланс стал 0,00 руб
 
+### Дополнительные кейсы классов и границ
+
+В каждом негативном кейсе ниже невалиден только один параметр; остальные поля запроса содержат валидные значения.
+
+| ID | Требование | Вид | Предусловие | Шаги и данные | Ожидаемый результат | Источник |
+|---|---|---|---|---|---|---|
+| TC-18 | R-A6 | негативный | Активная карта, достаточные лимиты и баланс | Авторизация с `amount=0` | Отказ валидации | AUTH-16, AUTH-B05 (OFF−) |
+| TC-19 | R-A6 | негативный | Активная карта | Авторизация с `amount=-1` | Отказ валидации | AUTH-17 |
+| TC-20 | R-A6 | негативный | Активная карта | Авторизация с `amount="abc"` | 400, ошибка формата | AUTH-18 |
+| TC-21 | R-C1 | негативный | Остальные поля создания валидны | `POST /api/cards`, `bin="40000"` | 400 | CM-02 |
+| TC-22 | R-C1 | негативный | Остальные поля создания валидны | `POST /api/cards`, `bin="ABCDEF"` | 400 | CM-03 |
+| TC-23 | R-C1 | негативный | Остальные поля создания валидны | `POST /api/cards`, `cardholderName=""` | 400 | CM-05 |
+| TC-24 | R-C1 | негативный | Остальные поля создания валидны | `POST /api/cards`, `currencyCode="RUB"` | 400 | CM-07 |
+| TC-25 | R-C1 | негативный | Остальные поля создания валидны | `POST /api/cards`, `dailyLimit=-1` | 400 | CM-09 |
+| TC-26 | R-C3 | позитивный | В БД есть `total` карт | `GET /api/cards?offset=total+1` | 200, `cards=[]`, `total` не меняется | CM-14, CM-B03 (OFF+) |
+| TC-27 | R-C3 | позитивный | Есть карты разных статусов | `GET /api/cards?status=BLOCKED` | 200, только BLOCKED | CM-15 |
+| TC-28 | R-C3 | негативный | Сервис доступен | `GET /api/cards?status=HACKED` | 400 | CM-16 |
+| TC-29 | R-C4 | негативный | PAN валиден по формату, но отсутствует | `PATCH /api/cards/{pan}` с `status=BLOCKED` | 404 | CM-18 |
+| TC-30 | R-C4 | негативный | Карта существует | `PATCH /api/cards/{pan}` с `status=FROZEN` | 400 | CM-19 |
+| TC-31 | R-C5 | негативный | Карта уже удалена | Повторить `DELETE /api/cards/{pan}` | 404 | CM-21 |
+| TC-32 | R-C6 | негативный | Остальные поля генерации валидны | `POST /api/cards/generate`, `count=0` | 400 | CM-23, CM-B04 (OFF−) |
+| TC-33 | R-C6 | негативный | `count=1` | `POST /api/cards/generate`, `bins=[]` | 400 | CM-25 |
+| TC-34 | R-C8 | негативный | Активная карта, баланс `B` | Резервирование с `amount=B+1` | 402, баланс не изменился | CM-27, CM-B05 (OFF−) |
+| TC-35 | R-C8 | негативный | Активная карта, достаточный баланс | Резервирование с `rrn="123"` | 400 | CM-29 |
+| TC-36 | R-C1 | позитивный | Карта создаётся через API | Проверить сгенерированный `expiryDate` | Ровно 4 цифры MMYY, дата на 3 года позже текущей | CM-B06 (ON) |
+| TC-37 | R-C2 | негативный | Сервис доступен | GET по PAN длиной 15, затем 17 цифр отдельными прогонами | 400 в каждом прогоне | CM-B01 (OFF−/OFF+) |
+
 
 ## Требования и их покрытие
 
@@ -283,18 +332,19 @@ R-C — к Card Management.
 | R-A3 | Срок действия: прошлый месяц — отказ «54» | ТЗ Authorization, алгоритм, шаг 3 | TC-06 |
 | R-A4 | Дневной лимит: сверх — отказ «61» | ТЗ Authorization, алгоритм, шаг 4; учёт лимитов | TC-07, TC-08 |
 | R-A5 | Месячный лимит: сверх — отказ «61» | ТЗ Authorization, алгоритм, шаг 5; учёт лимитов | TC-09 |
-| R-A6 | Баланс: сумма не больше доступного, иначе «51» | ТЗ Authorization, алгоритм, шаг 6 | TC-10, TC-11 |
+| R-A6 | Баланс и формат суммы: сумма положительна и не больше доступного, иначе отказ | ТЗ Authorization, алгоритм, шаг 6 | TC-10, TC-11, TC-18...TC-20 |
 | R-A7 | Успех: резервирование, RRN 12 цифр, authCode 6 символов | ТЗ Authorization, алгоритм, шаг 7; генерация идентификаторов | TC-01, TC-10 |
 | R-A8 | CMS недоступна — отказ «05», ISSUER_TIMEOUT | ТЗ Authorization, обработка ошибок | TC-12 |
-| R-C1 | Создание карты: PAN по Луну, срок +3 года, статус ACTIVE | ТЗ Card Management, CRUD карт | TC-13 |
-| R-C2 | Получение карты по PAN: 200 / 404 | ТЗ Card Management, CRUD карт | TC-13, TC-15 |
-| R-C3 | Список карт с пагинацией и фильтрами | ТЗ Card Management, список карт | TC-16 |
-| R-C4 | Частичное обновление карты (PATCH) | ТЗ Card Management, CRUD карт | TC-14 |
-| R-C5 | Мягкое удаление: карта исчезает из GET и транзакций | ТЗ Card Management, CRUD карт | TC-15 |
-| R-C6 | Генератор карт: распределение по BIN, статусы 95/3/2 | ТЗ Card Management, генератор тестовых карт | TC-16 |
+| R-C1 | Создание карты: валидация полей, PAN по Луну, срок +3 года, статус ACTIVE | ТЗ Card Management, CRUD карт | TC-13, TC-21...TC-25, TC-36 |
+| R-C2 | Получение карты по PAN: 200 / 400 / 404 | ТЗ Card Management, CRUD карт | TC-13, TC-15, TC-37 |
+| R-C3 | Список карт с пагинацией и фильтрами | ТЗ Card Management, список карт | TC-16, TC-26...TC-28 |
+| R-C4 | Частичное обновление карты (PATCH) | ТЗ Card Management, CRUD карт | TC-14, TC-29, TC-30 |
+| R-C5 | Мягкое удаление: карта исчезает из GET и транзакций | ТЗ Card Management, CRUD карт | TC-15, TC-31 |
+| R-C6 | Генератор карт: распределение по BIN, статусы 95/3/2 | ТЗ Card Management, генератор тестовых карт | TC-16, TC-32, TC-33 |
 | R-C7 | Сгенерированный PAN проходит алгоритм Луна | ТЗ Card Management, алгоритм Луна | TC-13, TC-16 |
-| R-C8 | Резервирование: баланс уменьшается на сумму | ТЗ Card Management, резервирование средств | TC-17 |
-| — | Попарное покрытие всех пар параметров авторизации | модель и маппинг в приложении Г | 27 строк + критичные тройки |
+| R-C8 | Резервирование: валидация запроса и уменьшение баланса | ТЗ Card Management, резервирование средств | TC-17, TC-34, TC-35 |
+| — | Попарное покрытие всех пар параметров авторизации | модель и маппинг в разделе «Попарное тестирование» | 21 строка + критичные сочетания |
+| — | Попарное покрытие параметров создания карты | модель и маппинг в разделе «Попарное тестирование» | CM-PW-01...CM-PW-12 |
 
 ## Классы эквивалентности
 
@@ -334,23 +384,23 @@ R-C — к Card Management.
 | CM-05 | cardholderName | Пустое/отсутствует | нет | "" | 400 |
 | CM-06 | currencyCode | 3 цифры | да | "643" | карта создана |
 | CM-07 | currencyCode | Иной формат | нет | "64", "RUB" | 400 |
-| CM-08 | dailyLimit / monthlyLimit / initialBalance | Положительные целые | да | 15000000 / 300000000 / 100000000 | карта создана |
-| CM-09 | dailyLimit | 0 или отрицательный | нет | 0, −1 | 400 |
-| CM-10 | monthlyLimit | < dailyLimit | нет | daily 500000, monthly 100000 | 400 — открытый вопрос, см. раздел 7 |
+| CM-08 | dailyLimit / monthlyLimit / initialBalance | Неотрицательные суммы | да | 0 / 15000000 / 100000000 | карта создана |
+| CM-09 | dailyLimit / monthlyLimit | Отрицательное значение | нет | −1 | 400 |
+| CM-10 | monthlyLimit | < dailyLimit | да по текущему контракту | daily 30000000, monthly 15000000 | 201; оба поля сохранены |
 | CM-11 | GET /api/cards/{pan} | Существующий PAN | да | карта из пула | 200, данные карты |
 | CM-12 | GET /api/cards/{pan} | Несуществующий PAN | нет | валидный по Луну несуществующий | 404 |
-| CM-13 | GET /api/cards (пагинация) | limit/offset в допустимом диапазоне | да | limit=10, offset=0 | 200, total ≤ 10 записей |
+| CM-13 | GET /api/cards (пагинация) | limit/offset в допустимом диапазоне | да | limit=10, offset=0 | 200, `cards.size ≤ 10`; `total` — общее число по фильтру |
 | CM-14 | GET /api/cards (пагинация) | offset за пределами total | нет | offset = total + 1 | 200, пустой список cards |
 | CM-15 | GET /api/cards (фильтр status) | Допустимое значение | да | ACTIVE/INACTIVE/BLOCKED/EXPIRED | 200, только карты статуса |
-| CM-16 | GET /api/cards (фильтр status) | Недопустимое значение | нет | status=HACKED | 400 или пустой результат — открытый вопрос, см. раздел 7 |
+| CM-16 | GET /api/cards (фильтр status) | Недопустимое значение | нет | status=HACKED | 400 |
 | CM-17 | PATCH | Корректные изменяемые поля | да | {"status":"BLOCKED"} | 200, поле изменено |
 | CM-18 | PATCH | Несуществующий PAN | нет | случайный валидный PAN | 404 |
 | CM-19 | PATCH | Недопустимое значение поля | нет | {"status":"FROZEN"} | 400 |
-| CM-20 | DELETE | Существующая карта | да | активная карта | 200; GET → 404; транзакции не проходят |
+| CM-20 | DELETE | Существующая карта | да | активная карта | 204; GET → 404; транзакции не проходят |
 | CM-21 | DELETE | Уже удалённая (DELETED) | нет | повторный DELETE того же PAN | 404 |
-| CM-22 | generate.count | Целое ≥ 1 | да | 20 | 200, создано ровно count |
+| CM-22 | generate.count | Целое ≥ 1 | да | 20 | 201, создано ровно count |
 | CM-23 | generate.count | 0 или отрицательное | нет | 0 | 400 |
-| CM-24 | generate.bins | Непустой список валидных BIN | да | ["400000","400001"] | 200, распределение по BIN равномерно |
+| CM-24 | generate.bins | Непустой список валидных BIN | да | ["400000","400001"] | 201, распределение по BIN равномерно |
 | CM-25 | generate.bins | Пустой список | нет | [] | 400 |
 | CM-26 | reserve.amount | ≤ availableBalance | да | amount = баланс | 200, баланс уменьшился |
 | CM-27 | reserve.amount | > availableBalance | нет | amount = баланс + 1 | отказ (по коду сервиса 402 InsufficientFunds/PaymentRequired) |
@@ -372,89 +422,93 @@ B — граница (boundary): AUTH-B1 = граница №1 для автор
 | AUTH-B04 | expiryDate (текущий месяц) | прошлый месяц → DECLINED "54" | текущий месяц → APPROVED | следующий месяц → APPROVED | [R-A3] |
 | AUTH-B05 | amount (минимум) | 0 → отказ валидации | 1 → APPROVED | 2 → APPROVED | [R-A6] |
 | CM-B01 | PAN (длина) | 15 → не проходит Лун/404 | 16 → валиден | 17 → невалиден | [R-C7] |
-| CM-B02 | limit (пагинация) | 1 → 1 запись | 50 (дефолт) | 51 — открытый вопрос о верхней границе, см. раздел 7 | [R-C3] |
+| CM-B02 | limit (максимум пагинации) | 9999 → 200 | 10000 → 200 | 10001 → 400 | [R-C3] |
 | CM-B03 | offset (пагинация) | total−1 → 1 запись | total → пусто | total+1 → пусто | [R-C3] |
 | CM-B04 | generate.count | 0 → 400 | 1 → 1 карта | 2 → 2 карты | [R-C6] |
 | CM-B05 | initialBalance при reserve | amount = B+1 → отказ | amount = B → 200, остаток 0 | amount = B−1 → 200 | [R-C8] |
+| CM-B06 | expiryDate (формат MMYY) | 3 символа → невалидный формат | 4 символа → валидный формат | 5 символов → невалидный формат | [R-C1] |
 
 ## Попарное тестирование
 
 ### Модель
 
-Модель — `pict/model.txt`: 8 параметров (card_status, pan_in_cms, amount_vs_daily, amount_vs_monthly, amount_vs_balance, expiry, terminal_type, mcc), 3 ограничения, исключающие бессмысленные сочетания (при не-ACTIVE карте или ненайденном PAN лимиты/баланс не проверяются; истёкший expiry закрывает проверку баланса).
+Модель — `pict/model.txt`: 8 параметров с конкретными значениями полей запроса Authorization и карточных данных: `status`, `amount`, `dailyLimit`, `monthlyLimit`, `availableBalance`, `expiryDate`, `terminalType`, `mcc`. Суммы заданы в копейках, срок — в MMYY, типы терминала и MCC соответствуют API. Для воспроизводимости во всех строках карта существует, использованные дневной и месячный лимиты равны 0, `transmissionDateTime = 2026-09-18T12:00:00Z`.
 
-Полный перебор: 4 × 2 × 3 × 3 × 3 × 3 × 3 × 3 = **5832** комбинации. Попарный набор: **27 строк** в `pict/cases.txt`.
+В модели пять ограничений. Первое исключает сочетание, где месячный лимит меньше дневного. Остальные отражают порядок проверок из ТЗ: после отказа по статусу или сроку действия лимиты и баланс уже не проверяются, поэтому для них фиксируется один конкретный валидный набор данных. Полный перебор: 4 × 3 × 2 × 2 × 3 × 3 × 3 × 3 = **3888** комбинаций, после ограничений — **522**. Попарный набор: **21 строка** в `pict/cases.txt`.
 
 ### Правило проецирования строки набора в тест-кейс
 
 Ожидаемый результат определяется порядком проверок алгоритма авторизации из ТЗ (порядок жёсткий):
 
-1. pan_in_cms = not_found → DECLINED "14"
-2. card_status = INACTIVE → "CARD_INACTIVE"; BLOCKED → "CARD_BLOCKED"; EXPIRED → "54"
-3. expiry = previous_month → DECLINED "54"
-4. amount_vs_daily = above → DECLINED "61"
-5. amount_vs_monthly = above → DECLINED "61"
-6. amount_vs_balance = above → DECLINED "51"
-7. иначе → APPROVED "00" (RRN 12 цифр, authCode 6 символов)
+1. `status = INACTIVE` → `CARD_INACTIVE`; `BLOCKED` → `CARD_BLOCKED`; `EXPIRED` → `54`.
+2. `expiryDate < 0926` → DECLINED `54` (дата операции зафиксирована в сентябре 2026 года).
+3. `amount > dailyLimit` → DECLINED `61` (использованный дневной лимит равен 0).
+4. `amount > monthlyLimit` → DECLINED `61` (использованный месячный лимит равен 0).
+5. `amount > availableBalance` → DECLINED `51`.
+6. иначе → APPROVED "00" (RRN 12 цифр, authCode 6 символов)
 
 
 ### Критичные сочетания, добавленные вручную (не покрываются парами)
 
 | ID | Сочетание 3+ параметров | Ожидание |
 |---|---|---|
-| PW-MAN-01 | ACTIVE + equal daily + equal monthly + equal balance (всё ровно на границах) | APPROVED "00" |
-| PW-MAN-02 | EXPIRED-статус + previous_month + amount above balance | DECLINED "54" (статус проверяется раньше срока) |
-| PW-MAN-03 | INACTIVE + above daily + above balance | DECLINED "CARD_INACTIVE" |
-| PW-MAN-04 | not_found + above daily (невозможное сочетание исключено ограничением; вручную подтверждаем приоритет причины) | DECLINED "14" |
+| PW-MAN-01 | `status=ACTIVE`, `amount=dailyLimit=monthlyLimit=availableBalance=15000000`, `expiryDate=1026` | APPROVED "00": равенство границе разрешено |
+| PW-MAN-02 | `status=ACTIVE`, `amount=1`, `dailyLimit=monthlyLimit=15000000`, `availableBalance=0`, `expiryDate=1026` | DECLINED "51" |
+| PW-MAN-03 | `status=INACTIVE`, `amount=15000001`, `dailyLimit=15000000`, `availableBalance=0` | DECLINED "CARD_INACTIVE": статус проверяется раньше лимитов и баланса |
+| PW-MAN-04 | запрос с существующим по формату, но отсутствующим в CMS PAN `4000000000000093` | DECLINED "14"; отсутствие карты вынесено отдельно, потому что у отсутствующей карты нет `status`, лимитов и баланса |
 
 ### Маппинг сгенерированного набора в тест-кейсы
 
-Набор построен попарным алгоритмом по модели. Из 5832 полных комбинаций ограничениям модели удовлетворяют 675; попарный набор покрывает все 222 пары значений 27 строками. Каждая строка — отдельный тест-кейс; ожидаемый результат определяется по правилу проецирования. terminal_type и mcc задают контекст терминала и на ожидание не влияют.
+Набор сгенерирован командой `pict pict/model.txt > pict/cases.txt` и покрывает все **199 допустимых пар** значений за 21 строку. Каждая строка — отдельный тест-кейс; `terminalType` и `mcc` задают реальные поля контекста и на решение Authorization по текущему ТЗ не влияют.
 
-| TC | card_status | pan_in_cms | vs_daily | vs_monthly | vs_balance | expiry | terminal | mcc | Ожидание |
-|---|---|---|---|---|---|---|---|---|---|
-| TC-PW-001 | ACTIVE | found | below | below | below | next_month | pos | grocery | APPROVED "00" |
-| TC-PW-002 | ACTIVE | found | equal | equal | equal | current_month | atm | restaurant | APPROVED "00" |
-| TC-PW-003 | ACTIVE | found | above | above | below | previous_month | ecom | electronics | DECLINED "54" |
-| TC-PW-004 | ACTIVE | not_found | below | below | below | current_month | atm | electronics | DECLINED "14" |
-| TC-PW-005 | INACTIVE | found | below | below | below | previous_month | ecom | restaurant | DECLINED "CARD_INACTIVE" |
-| TC-PW-006 | ACTIVE | found | equal | equal | above | next_month | pos | electronics | DECLINED "51" |
-| TC-PW-007 | ACTIVE | found | above | above | above | current_month | atm | grocery | DECLINED "61" |
-| TC-PW-008 | ACTIVE | found | above | above | equal | next_month | pos | restaurant | DECLINED "61" |
-| TC-PW-009 | ACTIVE | found | equal | equal | below | previous_month | ecom | grocery | DECLINED "54" |
-| TC-PW-010 | BLOCKED | found | below | below | below | next_month | atm | grocery | DECLINED "CARD_BLOCKED" |
-| TC-PW-011 | EXPIRED | found | below | below | below | next_month | ecom | grocery | DECLINED "54" |
-| TC-PW-012 | ACTIVE | found | below | below | equal | current_month | ecom | grocery | APPROVED "00" |
-| TC-PW-013 | ACTIVE | found | below | below | above | next_month | ecom | restaurant | DECLINED "51" |
-| TC-PW-014 | ACTIVE | not_found | below | below | below | previous_month | pos | grocery | DECLINED "14" |
-| TC-PW-015 | INACTIVE | found | below | below | below | current_month | pos | grocery | DECLINED "CARD_INACTIVE" |
-| TC-PW-016 | EXPIRED | found | below | below | below | previous_month | atm | restaurant | DECLINED "54" |
-| TC-PW-017 | ACTIVE | not_found | below | below | below | next_month | ecom | restaurant | DECLINED "14" |
-| TC-PW-018 | INACTIVE | found | below | below | below | next_month | atm | electronics | DECLINED "CARD_INACTIVE" |
-| TC-PW-019 | BLOCKED | found | below | below | below | current_month | pos | restaurant | DECLINED "CARD_BLOCKED" |
-| TC-PW-020 | BLOCKED | found | below | below | below | previous_month | ecom | electronics | DECLINED "CARD_BLOCKED" |
-| TC-PW-021 | EXPIRED | found | below | below | below | current_month | pos | electronics | DECLINED "54" |
-| TC-PW-022 | ACTIVE | found | below | equal | equal | next_month | pos | electronics | APPROVED "00" |
-| TC-PW-023 | ACTIVE | found | below | above | below | next_month | pos | grocery | DECLINED "61" |
-| TC-PW-024 | ACTIVE | found | equal | below | below | next_month | pos | grocery | APPROVED "00" |
-| TC-PW-025 | ACTIVE | found | equal | above | below | next_month | pos | grocery | DECLINED "61" |
-| TC-PW-026 | ACTIVE | found | above | below | below | next_month | pos | grocery | DECLINED "61" |
-| TC-PW-027 | ACTIVE | found | above | equal | below | next_month | pos | grocery | DECLINED "61" |
+Общие предусловия: карта существует с указанными полями, использованные дневной и месячный лимиты равны 0, дата операции — `2026-09-18T12:00:00Z`. Шаг: отправить `POST /api/internal/authorize` с данными строки. Источник каждого кейса — одноимённая строка `pict/cases.txt`.
+
+| TC | Требование | Вид | status | amount | dailyLimit | monthlyLimit | balance | expiryDate | terminalType | mcc | Ожидание |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| TC-PW-001 | R-A2 | негативный | EXPIRED | 1 | 15000000 | 15000000 | 100000000 | 0826 | POS | 5732 | DECLINED "54" |
+| TC-PW-002 | R-A2 | негативный | BLOCKED | 1 | 15000000 | 15000000 | 100000000 | 1026 | ECOM | 5812 | DECLINED "CARD_BLOCKED" |
+| TC-PW-003 | R-A2 | негативный | INACTIVE | 1 | 15000000 | 15000000 | 100000000 | 1026 | ATM | 5812 | DECLINED "CARD_INACTIVE" |
+| TC-PW-004 | R-A2 | негативный | BLOCKED | 1 | 15000000 | 15000000 | 100000000 | 1026 | ATM | 5411 | DECLINED "CARD_BLOCKED" |
+| TC-PW-005 | R-A6 | негативный | ACTIVE | 15000000 | 30000000 | 300000000 | 0 | 0926 | ECOM | 5732 | DECLINED "51" |
+| TC-PW-006 | R-A4 | негативный | ACTIVE | 15000001 | 15000000 | 300000000 | 15000000 | 0926 | POS | 5411 | DECLINED "61" |
+| TC-PW-007 | R-A6 | негативный | ACTIVE | 15000001 | 30000000 | 300000000 | 0 | 1026 | ATM | 5812 | DECLINED "51" |
+| TC-PW-008 | R-A2 | негативный | EXPIRED | 1 | 15000000 | 15000000 | 100000000 | 0826 | ATM | 5411 | DECLINED "54" |
+| TC-PW-009 | R-A4 | негативный | ACTIVE | 15000001 | 15000000 | 15000000 | 100000000 | 0926 | ECOM | 5732 | DECLINED "61" |
+| TC-PW-010 | R-A7 | позитивный | ACTIVE | 1 | 30000000 | 300000000 | 15000000 | 0926 | ATM | 5732 | APPROVED "00" |
+| TC-PW-011 | R-A2 | негативный | INACTIVE | 1 | 15000000 | 15000000 | 100000000 | 1026 | POS | 5812 | DECLINED "CARD_INACTIVE" |
+| TC-PW-012 | R-A2 | негативный | INACTIVE | 1 | 15000000 | 15000000 | 100000000 | 1026 | ECOM | 5411 | DECLINED "CARD_INACTIVE" |
+| TC-PW-013 | R-A6 | негативный | ACTIVE | 15000000 | 15000000 | 15000000 | 0 | 0926 | POS | 5812 | DECLINED "51" |
+| TC-PW-014 | R-A2 | негативный | BLOCKED | 1 | 15000000 | 15000000 | 100000000 | 1026 | POS | 5732 | DECLINED "CARD_BLOCKED" |
+| TC-PW-015 | R-A7 | позитивный | ACTIVE | 15000000 | 15000000 | 15000000 | 15000000 | 1026 | ECOM | 5812 | APPROVED "00" |
+| TC-PW-016 | R-A7 | позитивный | ACTIVE | 15000000 | 30000000 | 300000000 | 100000000 | 0926 | ATM | 5411 | APPROVED "00" |
+| TC-PW-017 | R-A2 | негативный | INACTIVE | 1 | 15000000 | 15000000 | 100000000 | 1026 | POS | 5732 | DECLINED "CARD_INACTIVE" |
+| TC-PW-018 | R-A2 | негативный | EXPIRED | 1 | 15000000 | 15000000 | 100000000 | 0826 | ECOM | 5812 | DECLINED "54" |
+| TC-PW-019 | R-A3 | негативный | ACTIVE | 1 | 15000000 | 15000000 | 100000000 | 0826 | POS | 5411 | DECLINED "54" |
+| TC-PW-020 | R-A6 | негативный | ACTIVE | 1 | 15000000 | 15000000 | 0 | 1026 | POS | 5411 | DECLINED "51" |
+| TC-PW-021 | R-A6 | негативный | ACTIVE | 15000001 | 30000000 | 300000000 | 0 | 1026 | POS | 5812 | DECLINED "51" |
 
 
 ### Модель Card Management
 
-Модель — `pict/cm-model.txt`: 6 параметров создания карты, 6 ограничений. Правило модели: невалидное значение встречается только с валидными остальными — соответствует правилу «один невалидный класс — один тест-кейс». Полный перебор — 96 комбинаций; попарный набор в `pict/cm-cases.txt` покрывает все пары значений за 8 строк.
+Модель — `pict/model-card-management.txt`: 7 реальных полей входных и результирующих карточных данных — `bin`, определяемый по нему `issuerId`, `cardholderName`, `currencyCode`, `dailyLimit`, `monthlyLimit`, `initialBalance`. Использованы зарегистрированные пары BIN и эмитента, трёхзначные коды валют и конкретные суммы в копейках. Нулевые лимит и баланс допустимы: для лимитов задано ограничение «неотрицательное значение», а резервирование разрешает списание только положительной суммы.
+
+Модель содержит три ограничения, фиксирующие реальные связи `400000 → ISS001`, `400001 → ISS002`, `400004 → ISS005`. Полный перебор: 3 × 3 × 2 × 3 × 3 × 2 × 2 = **648** комбинаций, после ограничений — **216**. Набор сгенерирован командой `pict pict/model-card-management.txt > pict/cases-card-management.txt` и покрывает все **132 допустимые пары** за 12 строк. Все строки позитивные: ожидается `201`, соответствующий BIN `issuerId`, PAN из 16 цифр с корректной цифрой Луна, `expiryDate` через 3 года и `status=ACTIVE`. Негативные классы проверяются отдельными тест-кейсами и намеренно не смешиваются в pairwise.
 
 ### Маппинг набора Card Management в тест-кейсы
 
-| Кейс | bin | cardholder | currency | daily | monthly | initial | Ожидание |
-|---|---|---|---|---|---|---|---|
-| CM-PW-01 | digits6 | filled | digits3 | positive | ge_daily | positive | карта создана: PAN 16 цифр по Луну, срок +3 года, статус ACTIVE |
-| CM-PW-02 | digits6 | filled | digits3 | positive | ge_daily | zero | 400 — стартовый баланс ≤ 0 |
-| CM-PW-03 | digits6 | filled | digits3 | positive | lt_daily | positive | 400 — месячный лимит меньше дневного (см. вопрос 1) |
-| CM-PW-04 | digits6 | filled | digits3 | zero | ge_daily | positive | 400 — дневной лимит ≤ 0 |
-| CM-PW-05 | digits6 | filled | wrong | positive | ge_daily | positive | 400 — некорректная валюта |
-| CM-PW-06 | digits6 | empty | digits3 | positive | ge_daily | positive | 400 — пустое имя держателя |
-| CM-PW-07 | digits5 | filled | digits3 | positive | ge_daily | positive | 400 — bin не 6 цифр |
-| CM-PW-08 | letters | filled | digits3 | positive | ge_daily | positive | 400 — bin содержит нецифровые символы |
+Общие предусловия: PostgreSQL доступен, пары BIN–issuerId зарегистрированы. Шаг: отправить `POST /api/cards` с входными полями строки; `issuerId` проверяется в ответе. Источник каждого кейса — одноимённая строка `pict/cases-card-management.txt`.
+
+| Кейс | Требование | Вид | bin | issuerId | cardholderName | currencyCode | dailyLimit | monthlyLimit | initialBalance | Ожидание |
+|---|---|---|---|---|---|---|---|---|---|---|
+| CM-PW-01 | R-C1, R-C7 | позитивный | 400004 | ISS005 | IVAN IVANOV | 643 | 30000000 | 15000000 | 100000000 | 201, карта создана |
+| CM-PW-02 | R-C1, R-C7 | позитивный | 400000 | ISS001 | ANNA SMIRNOVA | 978 | 15000000 | 300000000 | 0 | 201, карта создана |
+| CM-PW-03 | R-C1, R-C7 | позитивный | 400004 | ISS005 | IVAN IVANOV | 840 | 15000000 | 15000000 | 0 | 201, карта создана |
+| CM-PW-04 | R-C1, R-C7 | позитивный | 400001 | ISS002 | ANNA SMIRNOVA | 840 | 15000000 | 300000000 | 100000000 | 201, карта создана |
+| CM-PW-05 | R-C1, R-C7 | позитивный | 400001 | ISS002 | IVAN IVANOV | 643 | 15000000 | 300000000 | 0 | 201, карта создана |
+| CM-PW-06 | R-C1, R-C7 | позитивный | 400001 | ISS002 | ANNA SMIRNOVA | 978 | 0 | 15000000 | 100000000 | 201, карта создана |
+| CM-PW-07 | R-C1, R-C7 | позитивный | 400004 | ISS005 | ANNA SMIRNOVA | 840 | 30000000 | 300000000 | 0 | 201, карта создана |
+| CM-PW-08 | R-C1, R-C7 | позитивный | 400001 | ISS002 | IVAN IVANOV | 978 | 30000000 | 15000000 | 100000000 | 201, карта создана |
+| CM-PW-09 | R-C1, R-C7 | позитивный | 400000 | ISS001 | IVAN IVANOV | 643 | 30000000 | 15000000 | 100000000 | 201, карта создана |
+| CM-PW-10 | R-C1, R-C7 | позитивный | 400000 | ISS001 | IVAN IVANOV | 840 | 0 | 300000000 | 0 | 201, карта создана |
+| CM-PW-11 | R-C1, R-C7 | позитивный | 400004 | ISS005 | ANNA SMIRNOVA | 643 | 0 | 300000000 | 100000000 | 201, карта создана |
+| CM-PW-12 | R-C1, R-C7 | позитивный | 400004 | ISS005 | ANNA SMIRNOVA | 978 | 30000000 | 15000000 | 100000000 | 201, карта создана |

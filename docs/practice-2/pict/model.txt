@@ -1,12 +1,25 @@
-card_status:        ACTIVE, INACTIVE, BLOCKED, EXPIRED
-pan_in_cms:         found, not_found
-amount_vs_daily:    below, equal, above
-amount_vs_monthly:  below, equal, above
-amount_vs_balance:  below, equal, above
-expiry:             next_month, current_month, previous_month
-terminal_type:      pos, atm, ecom
-mcc:                grocery, restaurant, electronics
+status:            ACTIVE, INACTIVE, BLOCKED, EXPIRED
+amount:            1, 15000000, 15000001
+dailyLimit:        15000000, 30000000
+monthlyLimit:      15000000, 300000000
+availableBalance:  0, 15000000, 100000000
+expiryDate:        0826, 0926, 1026
+terminalType:      POS, ATM, ECOM
+mcc:               5411, 5812, 5732
 
-IF [card_status] <> "ACTIVE" THEN [amount_vs_daily] = "below" AND [amount_vs_monthly] = "below" AND [amount_vs_balance] = "below";
-IF [pan_in_cms] = "not_found" THEN [card_status] = "ACTIVE" AND [amount_vs_daily] = "below" AND [amount_vs_monthly] = "below" AND [amount_vs_balance] = "below";
-IF [expiry] = "previous_month" THEN [amount_vs_balance] = "below";
+# Месячный лимит не может быть меньше дневного.
+IF [dailyLimit] = 30000000 THEN [monthlyLimit] = 300000000;
+
+IF [status] = "INACTIVE" THEN [amount] = 1 AND [dailyLimit] = 15000000
+    AND [monthlyLimit] = 15000000 AND [availableBalance] = 100000000
+    AND [expiryDate] = 1026;
+IF [status] = "BLOCKED" THEN [amount] = 1 AND [dailyLimit] = 15000000
+    AND [monthlyLimit] = 15000000 AND [availableBalance] = 100000000
+    AND [expiryDate] = 1026;
+IF [status] = "EXPIRED" THEN [amount] = 1 AND [dailyLimit] = 15000000
+    AND [monthlyLimit] = 15000000 AND [availableBalance] = 100000000
+    AND [expiryDate] = 826;
+
+# После отказа по expiry лимиты и баланс не проверяются.
+IF [expiryDate] = 826 THEN [amount] = 1 AND [dailyLimit] = 15000000
+    AND [monthlyLimit] = 15000000 AND [availableBalance] = 100000000;

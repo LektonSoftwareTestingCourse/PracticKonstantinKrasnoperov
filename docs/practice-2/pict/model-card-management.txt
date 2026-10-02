@@ -1,0 +1,12 @@
+bin:              400000, 400001, 400004
+issuerId:         ISS001, ISS002, ISS005
+cardholderName:   IVAN IVANOV, ANNA SMIRNOVA
+currencyCode:     643, 840, 978
+dailyLimit:       0, 15000000, 30000000
+monthlyLimit:     15000000, 300000000
+initialBalance:   0, 100000000
+
+# BIN однозначно определяет issuerId создаваемой карты.
+IF [bin] = 400000 THEN [issuerId] = "ISS001";
+IF [bin] = 400001 THEN [issuerId] = "ISS002";
+IF [bin] = 400004 THEN [issuerId] = "ISS005";
