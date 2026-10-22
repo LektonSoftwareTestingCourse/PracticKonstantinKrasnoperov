@@ -1,0 +1,90 @@
+' Чего не хватало в проекте: исходная схема не различала sync/async, не показывала outbox и confirms;
+' Что сделано: уточнена исходная карта сервисов; добавлены протоколы, exchange/queue, outbox и confirms;
+' Ссылки на код:
+' docs/architecture-diagram.puml - исходная схема
+' docker-compose.yaml - состав сервисов и порты
+' services/gateway/src/main/resources/application.yml - маршруты Gateway
+' services/switch/src/main/java/com/processing/service/RouteService.java - маршрутизация, авторизация и откат
+' services/switch/src/main/java/com/processing/service/MerchantAcquirerClient.java - получение комиссии по HTTP
+' services/switch/src/main/java/com/processing/service/LoggerClient.java - отправка операций в RabbitMQ
+' services/card-management/src/main/java/com/processing/cardmanagement/services/OutboxEventProcessorImpl.java - отправка событий и повторные попытки
+' services/dashboard/nginx.conf - проксирование HTTP и WebSocket
+' services/merchant-acquirer/src/main/resources/application.yaml - подключение Merchant Acquirer к БД
+@startuml a2-container
+!pragma layout smetana
+!theme vibrant
+skinparam componentStyle rectangle
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam nodesep 120
+skinparam ranksep 140
+skinparam packageBorderColor #555555
+skinparam ArrowColor #555555
+skinparam ArrowThickness 2
+skinparam queueFontColor #222222
+skinparam databaseFontColor #222222
+
+title А2. C4 Level 2 — архитектура СМП\nМикросервисы, PostgreSQL и RabbitMQ
+
+package "Эмуляторы внешних систем" as Simulators #E3F2FD {
+  component "Terminal Simulator\nSpring Boot" as TERM #BBDEFB
+  component "Merchant Acquirer\nSpring Boot" as MERCH #BBDEFB
+}
+package "API Gateway" as Edge #FFF3E0 {
+  component "Gateway\nSpring Cloud Gateway" as GW #FFE0B2
+}
+package "Core Processing" as Core #E8F5E9 {
+  component "Switch / Router\nSpring Boot\nМаршрутизация по BIN" as SW #C8E6C9
+  component "Authorization Service\nSpring Boot\nПроверки и решение" as AUTH #C8E6C9
+  component "Card Management\nSpring Boot\nКарты, резерв, outbox" as CMS #C8E6C9
+}
+package "Внешний API" as External #FCE4EC {
+  component "BIN Lookup\nSpring Boot" as BIN #F8BBD0
+}
+package "Logging" as Logging #E0F7FA {
+  component "Transaction Logger\nSpring Boot" as LOG #B2EBF2
+}
+package "Notifications" as Notifications #EDE7F6 {
+  component "Notification Service\nSpring Boot" as NS #D1C4E9
+}
+package "Frontend" as Frontend #FFF9C4 {
+  component "Dashboard\nReact + nginx" as WEB #FFF176
+}
+package "Брокер сообщений" as Infra #ECEFF1 {
+  queue "RabbitMQ\nAMQP" as RMQ #CFD8DC
+}
+package "Хранилище" as Storage #ECEFF1 {
+  database "PostgreSQL\nОбщая БД" as DB #CFD8DC
+}
+package "Профиль observability" as Operations #F5F5F5 {
+  component "Autoscaler\nShell / Docker CLI\n11-й компонент, опционально" as SCALE #EEEEEE
+}
+
+TERM -[#1565C0]down-> GW : sync HTTP\nPOST /api/transactions
+MERCH -[#1565C0]down-> GW : sync HTTP\nPOST /api/transactions
+GW -[#1565C0]down-> SW : sync HTTP\nPOST /api/internal/route
+SW -[#1565C0]down-> AUTH : sync HTTP\nPOST /api/internal/authorize\nPOST /api/internal/rollback
+AUTH -[#1565C0]down-> CMS : sync HTTP\nGET /api/cards/{pan}\nPOST reserve / rollback
+AUTH -[#1565C0]down-> BIN : sync HTTP\nGET /api/bin/{bin}
+
+SW -[#2E7D32,dashed]down-> RMQ : async AMQP\nexchange: smp.transactions\nkey: transaction.log\nConfirms включены;\nожидания ACK нет
+RMQ -[#2E7D32,dashed]down-> LOG : async AMQP\nqueue: transaction-log
+CMS -[#2E7D32,dashed]down-> RMQ : async AMQP\noutbox -> exchange:\nsmp.card-events\nkey: card.<EventClass>
+RMQ -[#2E7D32,dashed]down-> NS : async AMQP\nqueue: card-notifications\nbinding: card.*
+
+CMS -[#616161]down-> DB : sync JDBC\nКарты / резервы / outbox
+AUTH -[#616161]down-> DB : sync JDBC\nЛимиты / RRN
+LOG -[#616161]down-> DB : sync JDBC\nЖурнал
+NS -[#616161]down-> DB : sync JDBC\nУведомления
+MERCH -[#616161]-> DB : sync JDBC\nМерчанты / комиссии
+
+WEB -[#1565C0]down-> GW : sync HTTP\nЖурнал и статистика
+WEB -[#8E24AA,dashed]-> LOG : async WebSocket
+
+GW -[#1565C0,norank]-> CMS : sync HTTP\n/api/cards/**\nУправление картами
+GW -[#1565C0,norank]-> LOG : sync HTTP\n/api/transactions/**\n/api/dashboard/**
+SW -[#1565C0,norank]-> MERCH : sync HTTP\nPOST /api/simulator/merchant/fee
+
+GW -[hidden]down-> Core
+@enduml

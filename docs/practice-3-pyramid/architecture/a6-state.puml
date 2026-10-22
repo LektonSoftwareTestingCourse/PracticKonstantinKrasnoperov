@@ -1,0 +1,51 @@
+' Чего не хватало в проекте: не было диаграммы состояний; enum транзакции смешивался со статусом резерва.
+' Что сделано: добавлен DELETED; произвольный PATCH статуса отделён от проверки срока; Transaction и Reservation разделены.
+' Ссылки на код:
+' services/card-management/src/main/java/com/processing/cardmanagement/models/CardStatus.java - список статусов карты
+' services/card-management/src/main/java/com/processing/cardmanagement/models/Card.java - изменение статуса и баланса карты
+' services/card-management/src/main/java/com/processing/cardmanagement/services/CardServiceImpl.java - управление картами и резервами
+' services/card-management/src/main/java/com/processing/cardmanagement/services/CardGeneratorService.java - создание карт разных статусов
+' services/card-management/src/main/java/com/processing/cardmanagement/models/CardEntity.java - хранение карты и скрытие DELETED
+' services/authorization/src/main/java/com/processing/authorization/services/AuthServiceImpl.java - проверки карты, лимитов и авторизация
+' services/common/src/main/java/com/processing/common/dto/transactionlogger/TransactionStatus.java - статусы APPROVED и DECLINED
+' services/card-management/src/main/java/com/processing/cardmanagement/models/Reservation.java - создание и откат резерва
+' services/switch/src/main/java/com/processing/service/RouteService.java - маршрутизация, авторизация и откат
+@startuml a6-state
+!pragma layout smetana
+skinparam defaultFontName SansSerif
+skinparam shadowing false
+skinparam nodesep 35
+skinparam ranksep 45
+title А6. Состояния карты, операции и резерва
+state "Card.status" as Cards {
+  [*] --> ACTIVE: Создание карты
+  ACTIVE --> INACTIVE: PATCH / bulk-update
+  INACTIVE --> ACTIVE: PATCH / bulk-update
+  ACTIVE --> BLOCKED: PATCH / bulk-update
+  BLOCKED --> ACTIVE: PATCH / bulk-update
+  ACTIVE --> EXPIRED: PATCH / bulk-update
+  EXPIRED --> ACTIVE: PATCH / bulk-update
+  ACTIVE --> DELETED: DELETE
+  INACTIVE --> DELETED: DELETE
+  BLOCKED --> DELETED: DELETE
+  EXPIRED --> DELETED: DELETE
+}
+
+state "TransactionStatus" as Tx {
+  state "Решение" as Decision <<choice>>
+  [*] --> Decision: Авторизация
+  Decision --> APPROVED: Проверки и резерв успешны
+  Decision --> DECLINED: Отказ / ошибка
+  APPROVED --> [*]
+  DECLINED --> [*]
+}
+
+state "Reservation.status" as Res {
+  [*] --> RESERVED: reserve
+  RESERVED --> ROLLED_BACK: rollback: возврат суммы
+  ROLLED_BACK --> ROLLED_BACK: Повтор -> HTTP 409
+}
+
+Cards -[hidden]down-> Tx
+Tx -[hidden]down-> Res
+@enduml

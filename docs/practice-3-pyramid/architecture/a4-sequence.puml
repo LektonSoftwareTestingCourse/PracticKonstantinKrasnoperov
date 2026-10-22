@@ -1,0 +1,108 @@
+' Чего не хватало в проекте: был только happy path, отсутствовали отказ, ошибка публикации и разбор MTI 0400.
+' Что сделано: async-доставка отделена от HTTP; показаны реальные сценарии и отдельный ожидаемый reversal 0400 по ТЗ.
+' Ссылки на код:
+' services/gateway/src/main/java/com/processing/gateway/validation/TransactionRequestValidator.java - проверка полей запроса и MTI
+' services/gateway/src/main/resources/application.yml - маршруты Gateway
+' services/switch/src/main/java/com/processing/service/RouteService.java - маршрутизация, авторизация и откат
+' services/switch/src/main/java/com/processing/service/AuthorizationClient.java - HTTP-вызовы authorize и rollback
+' services/switch/src/main/java/com/processing/service/LoggerClient.java - отправка операций в RabbitMQ
+' services/authorization/src/main/java/com/processing/authorization/services/AuthServiceImpl.java - проверки карты, лимитов и авторизация
+' services/authorization/src/main/java/com/processing/authorization/controller/AuthControllerImpl.java - HTTP-обработчики авторизации и отката
+' services/card-management/src/main/java/com/processing/cardmanagement/services/CardServiceImpl.java - управление картами и резервами
+' services/transaction-logger/src/main/java/com/processing/transactionlogger/service/TransactionService.java - сохранение журнала без дублей
+' services/common/src/main/java/com/processing/common/dto/authorization/AuthorizationRequest.java - данные запроса и метод forReversal
+' tz/03-switch.md - требования к подтверждению и reversal
+' tz/04-authorization.md - требования к авторизации и возврату лимита
+@startuml a4-sequence
+!pragma layout smetana
+skinparam defaultFontName SansSerif
+skinparam shadowing false
+skinparam nodesep 35
+skinparam ranksep 45
+title А4. Успех, отказ и откат операции
+actor Клиент as T
+participant Gateway as G
+participant Switch as S
+participant Authorization as A
+participant "Card Management" as C
+participant "BIN Lookup" as B
+participant "Merchant Acquirer" as M
+database PostgreSQL as DB
+queue RabbitMQ as Q
+participant Logger as L
+
+group 1. Happy path (MTI 0100)
+T -> G: HTTP sync: POST /api/transactions
+G -> S: HTTP sync: /api/internal/route
+S -> S: BIN -> issuerId
+S -> A: HTTP sync: /api/internal/authorize
+A -> C: HTTP sync: GET карта
+C --> A: Карта
+A -> B: HTTP sync: GET BIN
+B --> A: Данные / пустой результат
+A -> A: Статус -> срок -> баланс
+A -> DB: JDBC sync: лимиты и RRN
+A -> C: HTTP sync: reserve
+C -> DB: JDBC sync: резерв, баланс, outbox
+C --> A: Резерв создан
+A --> S: APPROVED / 00
+S -> M: HTTP sync: комиссия
+M --> S: Комиссия / null
+S ->> Q: AMQP async: smp.transactions / transaction.log
+par Ответ клиенту
+S --> G: HTTP 200, APPROVED / 00
+G --> T: HTTP 200, APPROVED / 00
+else Доставка журнала
+Q ->> L: AMQP async: transaction-log
+L -> DB: JDBC sync: сохранить операцию
+end
+end
+
+group 2. Declined: карта BLOCKED
+T -> G: HTTP sync: операция 0100
+G -> S: HTTP sync: route
+S -> A: HTTP sync: authorize
+A -> C: HTTP sync: GET карта
+C --> A: BLOCKED
+A -> B: HTTP sync: GET BIN
+B --> A: Данные / пустой результат
+A --> S: HTTP 403, DECLINED / 05, CARD_BLOCKED
+S -> M: HTTP sync: комиссия
+M --> S: Комиссия / null
+S ->> Q: AMQP async: отказ в transaction-log
+S --> G: HTTP 200, DECLINED / 05
+G --> T: HTTP 200, DECLINED / 05
+Q ->> L: AMQP async: сохранить отказ
+L -> DB: JDBC sync: сохранить отказ
+end
+
+group 3. Откат после успешного резервирования
+... Авторизация и резервирование — как в сценарии 1 ...
+S -> M: HTTP sync: комиссия
+M --> S: Комиссия / null
+alt Реализация: ошибка отправки
+S ->> Q: AMQP async: отправка -> AmqpException
+S -> A: HTTP sync: /api/internal/rollback (rrn, pan, amount)
+A -> C: HTTP sync: /api/cards/{pan}/rollback
+C -> DB: JDBC sync: вернуть деньги, резерв ROLLED_BACK
+C --> A: Откат выполнен
+A --> S: Откат выполнен
+else По ТЗ: reversal 0400 (не реализован)
+S ->> Q: AMQP async: отправка операции
+alt NACK
+Q -->> S: AMQP async: отказ брокера
+else Нет ACK
+... 2 секунды ...
+S -> S: Таймаут подтверждения
+end
+S -> A: HTTP sync по ТЗ: reversal 0400, rrn, pan, amount
+A -> C: HTTP sync по ТЗ: отмена резерва
+C -> DB: JDBC sync по ТЗ: вернуть деньги, резерв ROLLED_BACK
+C --> A: Откат выполнен
+A -> DB: JDBC sync по ТЗ: восстановить лимит
+A --> S: Reversal выполнен
+end
+S --> G: HTTP 200, DECLINED / 96
+G --> T: HTTP 200, DECLINED / 96
+end
+@enduml

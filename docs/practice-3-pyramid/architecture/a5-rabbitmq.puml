@@ -1,0 +1,48 @@
+' Чего не хватало в проекте: топология была текстом; смешивались HTTP retry, publisher confirms и consumer retry.
+' Что сделано: показаны две топологии и DLX/DLQ, TTL 60 s, фактический outbox retry и отсутствующие гарантии 2 s / 3 доставки.
+' Ссылки на код:
+' services/switch/src/main/java/com/processing/config/RabbitMQConfig.java - очередь журнала, DLX и DLQ
+' services/transaction-logger/src/main/java/com/processing/transactionlogger/config/RabbitMQConfig.java - основная очередь журнала и привязка
+' services/card-management/src/main/java/com/processing/cardmanagement/config/RabbitMQConfig.java - обменник карточных событий, очереди и DLQ
+' services/notification-service/src/main/java/com/processing/notification/config/RabbitMQConfig.java - очередь уведомлений, DLX и DLQ
+' services/switch/src/main/java/com/processing/service/LoggerClient.java - отправка операций в RabbitMQ
+' services/card-management/src/main/java/com/processing/cardmanagement/services/OutboxEventProcessorImpl.java - отправка событий и повторные попытки
+' services/card-management/src/main/resources/application.properties - интервал outbox и число повторов
+' services/switch/src/main/resources/application.yml - настройка publisher confirms
+' services/notification-service/src/main/resources/application.yml - подключения Notification к БД и RabbitMQ
+' services/transaction-logger/src/main/resources/application.yaml - подключения Logger к БД и RabbitMQ
+@startuml a5-rabbitmq
+!pragma layout smetana
+skinparam defaultFontName SansSerif
+skinparam shadowing false
+skinparam nodesep 35
+skinparam ranksep 45
+title А5. RabbitMQ: журнал и карточные события
+top to bottom direction
+rectangle "Switch\nLoggerClient" as S
+rectangle "smp.transactions\n(topic)" as TX
+queue "transaction-log\nx-max-delivery=3" as TQ
+rectangle "TransactionLogListener\nLogger" as TL
+rectangle "smp.transactions.dlx\n(direct)" as DX
+queue "transaction-log-dlq\nTTL 60 с" as DQ
+
+database "outbox_event\nPENDING" as OB
+rectangle "Card Management\nOutboxEventProcessorImpl" as P
+rectangle "smp.card-events\n(topic)" as CX
+queue "card-notifications\nx-max-delivery=3" as CQ
+rectangle "CardEventListener\nNotification" as CL
+rectangle "smp.card-events.dlx\n(direct)" as CDX
+queue "card-notifications-dlq\nTTL 60 с" as CDQ
+
+S ..> TX: AMQP async\ntransaction.log
+TX ..> TQ: AMQP async\ntransaction.log
+TQ ..> TL: AMQP async\nобработка
+TQ ..> DX: AMQP async\nreject без requeue
+DX ..> DQ: AMQP async\ntransaction-log
+OB --> P: JDBC sync\nчтение раз в 1 с
+P ..> CX: AMQP async\ncard.<EventClass>
+CX ..> CQ: AMQP async\ncard.*
+CQ ..> CL: AMQP async\nобработка
+CQ ..> CDX: AMQP async\ndead-letter
+CDX ..> CDQ: AMQP async\ncard-notifications
+@enduml

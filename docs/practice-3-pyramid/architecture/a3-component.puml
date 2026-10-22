@@ -1,0 +1,62 @@
+' Чего не хватало в проекте: отсутствовала схема внутренних компонентов Authorization и Card Management.
+' Что сделано: показаны контроллеры, сервисы, HTTP-клиенты, репозитории и обработка outbox.
+' Ссылки на код:
+' services/authorization/src/main/java/com/processing/authorization/controller/AuthControllerImpl.java - HTTP-обработчики авторизации и отката
+' services/authorization/src/main/java/com/processing/authorization/services/AuthServiceImpl.java - проверки карты, лимитов и авторизация
+' services/authorization/src/main/java/com/processing/authorization/client/CardManagementClientImpl.java - HTTP-вызовы Card Management
+' services/authorization/src/main/java/com/processing/authorization/client/BinLookupClient.java - HTTP-запрос данных по BIN
+' services/authorization/src/main/java/com/processing/authorization/repositories/LimitUsageRepository.java - SQL-учёт лимитов и получение RRN
+' services/card-management/src/main/java/com/processing/cardmanagement/controllers/CardController.java - HTTP-операции с картами и резервами
+' services/card-management/src/main/java/com/processing/cardmanagement/services/CardServiceImpl.java - управление картами и резервами
+' services/card-management/src/main/java/com/processing/cardmanagement/services/TransactionRunnerImpl.java - выполнение операций в транзакции
+' services/card-management/src/main/java/com/processing/cardmanagement/events/CardEventNotifierImpl.java - сохранение карточных событий в outbox
+' services/card-management/src/main/java/com/processing/cardmanagement/repositories/CardJpaRepository.java - чтение карт и блокировка при изменении
+' services/card-management/src/main/java/com/processing/cardmanagement/services/OutboxProcessor.java - периодическая обработка событий outbox
+' services/card-management/src/main/java/com/processing/cardmanagement/services/OutboxEventProcessorImpl.java - отправка событий и повторные попытки
+@startuml a3-component
+!pragma layout smetana
+skinparam defaultFontName SansSerif
+skinparam shadowing false
+skinparam nodesep 35
+skinparam ranksep 45
+!include <C4/C4_Component>
+AddRelTag("async", $lineStyle=DashedLine())
+AddRelTag("sync", $lineStyle=SolidLine())
+title А3. Компоненты Authorization и Card Management
+Container_Boundary(authB, "Authorization") {
+  Component(ac, "AuthControllerImpl", "Spring MVC", "authorize / rollback")
+  Component(asvc, "AuthServiceImpl", "Service", "Статус, срок, баланс, лимиты")
+  Component(cc, "CardManagementClientImpl", "RestClient", "Работа с картой")
+  Component(bc, "BinLookupClient", "RestClient", "Получение BIN")
+  Component(lr, "LimitUsageRepository", "JPA / SQL", "Лимиты и RRN")
+}
+Container_Boundary(cardB, "Card Management") {
+  Component(ctrl, "CardController", "Spring MVC", "CRUD / reserve / rollback")
+  Component(svc, "CardServiceImpl", "Service", "Карты и резервы")
+  Component(repo, "Репозитории карт и резервов", "JPA", "Card / Reservation / ReservationRollback")
+  Component(notifier, "CardEventNotifierImpl", "Java", "Создание события PENDING")
+  Component(ob, "OutboxJpaAdapter", "JPA", "Таблица outbox_event")
+  Component(poll, "OutboxProcessor", "Scheduler", "Чтение PENDING раз в 1 с")
+  Component(pub, "OutboxEventProcessorImpl", "RabbitTemplate", "Сохранение и отправка события")
+}
+Container_Ext(bin, "BIN Lookup", "HTTP", "Внешний API")
+ContainerDb(pg, "PostgreSQL", "JDBC", "Карты, резервы, лимиты, outbox")
+ContainerQueue(mq, "RabbitMQ", "AMQP", "smp.card-events -> card-notifications")
+Rel(ac, asvc, "Вызов", "sync Java", $tags="sync")
+Rel(asvc, cc, "Карта / резерв / откат", "sync Java", $tags="sync")
+Rel(asvc, bc, "BIN", "sync Java", $tags="sync")
+Rel(asvc, lr, "Лимиты / RRN", "sync Java", $tags="sync")
+Rel(lr, pg, "limit_usage / rrn_seq", "sync JDBC", $tags="sync")
+Rel(bc, bin, "GET /api/bin/{bin}", "sync HTTP", $tags="sync")
+Rel(cc, ctrl, "/api/cards/{pan}", "sync HTTP", $tags="sync")
+Rel(ctrl, svc, "Вызов", "sync Java", $tags="sync")
+Rel(svc, repo, "Чтение / запись", "sync Java", $tags="sync")
+Rel(repo, pg, "Карты / резервы", "sync JDBC", $tags="sync")
+Rel(svc, notifier, "Событие", "sync Java", $tags="sync")
+Rel(notifier, pub, "save(event)", "sync Java", $tags="sync")
+Rel(pub, ob, "Событие / результат отправки", "sync Java", $tags="sync")
+Rel(ob, pg, "outbox_event", "sync JDBC", $tags="sync")
+Rel(poll, ob, "findPending", "sync Java", $tags="sync")
+Rel(poll, pub, "processSingleEvent", "sync Java", $tags="sync")
+Rel(pub, mq, "card.<EventClass>", "async AMQP", $tags="async")
+@enduml

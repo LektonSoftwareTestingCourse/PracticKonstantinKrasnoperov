@@ -1,0 +1,31 @@
+' Чего не хватало в проекте: не было C4 L1 с явной границей системы и протоколами акторов.
+' Что сделано: выделено ядро СМП; эмуляторы и BIN Lookup показаны как внешние роли;
+' Ссылки на код:
+' services/terminal-simulator/src/main/java/com/processing/terminalsimulator/client/GatewayClient.java - отправка операций и получение карт
+' services/merchant-acquirer/src/main/java/com/processing/merchantacquirer/client/GatewayClient.java - HTTP-запросы к Gateway
+' services/dashboard/nginx.conf - проксирование HTTP и WebSocket
+' services/dashboard/src/hooks/useWebSocket.ts - получение операций через WebSocket
+' services/authorization/src/main/java/com/processing/authorization/client/BinLookupClient.java - HTTP-запрос данных по BIN
+' services/gateway/src/main/resources/application.yml - маршруты Gateway
+' docker-compose.yaml - состав сервисов и порты
+@startuml a1-context
+!pragma layout smetana
+skinparam defaultFontName SansSerif
+skinparam shadowing false
+skinparam nodesep 35
+skinparam ranksep 45
+!include <C4/C4_Context>
+AddRelTag("async", $lineStyle=DashedLine())
+AddRelTag("sync", $lineStyle=SolidLine())
+title А1. Контекст СМП
+Person(user, "Пользователь Dashboard", "Просмотр операций")
+System_Ext(terminal, "Терминал", "Terminal Simulator")
+System_Ext(merchant, "Мерчант / эквайрер", "Merchant Acquirer")
+System(smp, "СМП", "Авторизация, карты, журнал, Dashboard")
+System_Ext(bin, "BIN Lookup", "Эмулятор внешнего API")
+Rel(terminal, smp, "Операции и карты", "sync HTTP/JSON", $tags="sync")
+Rel(merchant, smp, "Операции и карты", "sync HTTP/JSON", $tags="sync")
+Rel(smp, merchant, "Комиссия", "sync HTTP/JSON", $tags="sync")
+Rel(user, smp, "Dashboard :3000", "sync HTTP; async WebSocket", $tags="async")
+Rel(smp, bin, "GET /api/bin/{bin}", "sync HTTP/JSON", $tags="sync")
+@enduml
